@@ -688,10 +688,6 @@
         setStatus("globalStatus", "Conecta Google Drive primero.", "error");
         return;
       }
-      if (choice === "delivery" && state.role !== "admin") {
-        setStatus("globalStatus", "Solo el administrador puede subir edits finales.", "error");
-        return;
-      }
       state.upload.choice = choice;
       state.upload.files = [];
       $("uploadFiles").value = "";
@@ -699,12 +695,9 @@
       renderUploadScreen();
     }
     function renderUploadJobs() {
-      const isDelivery = uploadKind() === "delivery";
-      if (state.role !== "admin" && isDelivery) $("uploadKind").value = "source";
       const delivery = uploadKind() === "delivery";
       $("uploadVideoField").classList.toggle("hidden", !delivery);
       $("uploadNotes").closest(".field").classList.toggle("hidden", delivery);
-      $("uploadKind").querySelector('option[value="delivery"]').disabled = state.role !== "admin";
       const clientId = $("uploadClient").value;
       const allVideos = monthVideosFor(clientId, $("uploadMonth").value);
       const videos = allVideos.filter((video) => !["uploading", "delivery_uploading"].includes(video.status));

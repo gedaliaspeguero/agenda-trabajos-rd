@@ -60,7 +60,7 @@ begin
           'token', case when me.is_admin then c.token else null end,
           'steps', c.steps,
           'source_folder_id', c.source_folder_id,
-          'delivery_folder_id', case when me.is_admin then c.delivery_folder_id else null end
+          'delivery_folder_id', c.delivery_folder_id
         ) order by c.created_at), '[]'::jsonb)
         from agenda_clients c where not c.is_admin and not c.is_partner
       ),
@@ -200,7 +200,7 @@ declare me agenda_clients; video agenda_month_videos; workspace agenda_months;
 begin
   select * into me from agenda_clients where token = tok;
   if me.id is null then return jsonb_build_object('error', 'invalid_token'); end if;
-  if not me.is_admin then return jsonb_build_object('error', 'admin_required'); end if;
+  if not (me.is_admin or me.is_partner) then return jsonb_build_object('error', 'partner_or_admin_required'); end if;
   select v.* into video from agenda_month_videos v where v.id = p_video_id;
   if video.id is null then return jsonb_build_object('error', 'video_not_found'); end if;
   select * into workspace from agenda_months where id = video.month_id;
@@ -229,7 +229,7 @@ begin
   if me.id is null then return jsonb_build_object('error', 'invalid_token'); end if;
   select * into video from agenda_month_videos where id = p_video_id;
   if video.id is null then return jsonb_build_object('error', 'video_not_found'); end if;
-  if not me.is_admin and video.submitted_by <> me.id then return jsonb_build_object('error', 'forbidden'); end if;
+  if not me.is_admin and not (me.is_partner and video.upload_kind = 'delivery') and video.submitted_by <> me.id then return jsonb_build_object('error', 'forbidden'); end if;
   update agenda_month_videos
   set upload_files_done = greatest(coalesce(p_files_done, 0), 0),
       upload_files_total = greatest(coalesce(p_files_total, 0), 0),
@@ -253,9 +253,9 @@ begin
   if me.id is null then return jsonb_build_object('error', 'invalid_token'); end if;
   select * into video from agenda_month_videos where id = p_video_id;
   if video.id is null then return jsonb_build_object('error', 'video_not_found'); end if;
-  if not me.is_admin and video.submitted_by <> me.id then return jsonb_build_object('error', 'forbidden'); end if;
+  if not me.is_admin and not (me.is_partner and p_kind = 'delivery') and video.submitted_by <> me.id then return jsonb_build_object('error', 'forbidden'); end if;
   if p_kind not in ('source', 'delivery') then return jsonb_build_object('error', 'invalid_upload_kind'); end if;
-  if p_kind = 'delivery' and not me.is_admin then return jsonb_build_object('error', 'admin_required'); end if;
+  if p_kind = 'delivery' and not (me.is_admin or me.is_partner) then return jsonb_build_object('error', 'partner_or_admin_required'); end if;
   select coalesce(jsonb_agg(public.agenda_safe_link(value)), '[]'::jsonb)
   into clean_links from jsonb_array_elements_text(coalesce(p_links, '[]'::jsonb)) as item(value);
 
@@ -288,8 +288,8 @@ begin
   if me.id is null then return jsonb_build_object('error', 'invalid_token'); end if;
   select * into video from agenda_month_videos where id = p_video_id;
   if video.id is null then return jsonb_build_object('error', 'video_not_found'); end if;
-  if not me.is_admin and video.submitted_by <> me.id then return jsonb_build_object('error', 'forbidden'); end if;
-  if p_kind = 'delivery' and not me.is_admin then return jsonb_build_object('error', 'admin_required'); end if;
+  if not me.is_admin and not (me.is_partner and p_kind = 'delivery') and video.submitted_by <> me.id then return jsonb_build_object('error', 'forbidden'); end if;
+  if p_kind = 'delivery' and not (me.is_admin or me.is_partner) then return jsonb_build_object('error', 'partner_or_admin_required'); end if;
   next_status := case when p_kind = 'delivery' then 'editing' else 'needs_info' end;
   update agenda_month_videos
   set status = next_status,
