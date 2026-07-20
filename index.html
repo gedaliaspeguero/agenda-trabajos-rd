@@ -178,6 +178,8 @@
     .upload-choice-grid, .login-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .upload-choice { min-height: 210px; padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); display: grid; align-content: space-between; gap: 22px; text-align: left; }
     .upload-choice:hover { border-color: var(--accent); background: var(--accent-soft); filter: none; }
+    .upload-choice.is-locked { opacity: .56; cursor: not-allowed; }
+    .upload-choice.is-locked:hover { border-color: var(--line); background: var(--panel); }
     .upload-choice .choice-icon { width: 42px; height: 42px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
     .upload-choice svg { width: 23px; height: 23px; }
     .upload-choice h3 { margin: 0; font-size: 19px; letter-spacing: 0; }
@@ -658,6 +660,10 @@
       $("landingDriveAccount").textContent = text;
       $("landingConnectDriveBtn").textContent = connected ? "Cambiar cuenta" : "Conectar Google Drive";
       $("driveAccount").textContent = connected ? text : "Usa la cuenta que tiene acceso al Drive compartido.";
+      document.querySelectorAll("[data-upload-choice]").forEach((button) => {
+        button.classList.toggle("is-locked", !connected);
+        button.setAttribute("aria-disabled", String(!connected));
+      });
     }
     function renderUploadScreen() {
       const choice = state.upload.choice;
@@ -676,6 +682,12 @@
       }
     }
     function selectUploadChoice(choice) {
+      if (!state.drive.token || driveExpired()) {
+        if (driveExpired()) dropDriveToken();
+        setStatus("landingDriveAccount", "Conecta Google Drive primero para poder subir material.", "error");
+        setStatus("globalStatus", "Conecta Google Drive primero.", "error");
+        return;
+      }
       if (choice === "delivery" && state.role !== "admin") {
         setStatus("globalStatus", "Solo el administrador puede subir edits finales.", "error");
         return;
