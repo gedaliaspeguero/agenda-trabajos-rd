@@ -978,7 +978,7 @@
           await load();
         }
         if (t.dataset.copyClient) {
-          await navigator.clipboard.writeText(`${location.origin}${location.pathname}#${t.dataset.copyClient}`);
+          await navigator.clipboard.writeText(`${location.origin}${location.pathname}?c=${t.dataset.copyClient}`);
           setStatus("globalStatus", "Link copiado.", "ok");
         }
         if (t.dataset.saveClient) {
