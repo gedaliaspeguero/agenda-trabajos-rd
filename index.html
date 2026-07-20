@@ -256,10 +256,7 @@
             <h3>Registrar trabajo con links</h3>
             <div class="field"><span>Cliente</span><select id="jobClient"></select></div>
             <div class="field"><span>Nombre del trabajo</span><input id="jobTitle" required placeholder="Ej. Reels de esta semana"></div>
-            <div class="row">
-              <div class="field"><span>Fecha limite</span><input id="jobDeadline" type="date"></div>
-              <div class="field"><span>Videos</span><input id="jobVideos" type="number" min="0" value="0"></div>
-            </div>
+            <div class="field"><span>Videos</span><input id="jobVideos" type="number" min="0" value="0"></div>
             <div class="field"><span>Links de Drive</span><textarea id="jobLinks" placeholder="Uno por linea"></textarea></div>
             <div class="field"><span>Detalles</span><textarea id="jobNotes" placeholder="Notas para el editor"></textarea></div>
             <button type="submit">Registrar trabajo</button>
@@ -315,7 +312,6 @@
               <select id="uploadVideo"></select>
             </div>
             <div id="uploadVideoPreview" class="upload-destination">Se creara el siguiente video numerado.</div>
-            <div class="field"><span>Fecha limite</span><input id="uploadDeadline" type="date"></div>
             <div class="field"><span>Detalles</span><textarea id="uploadNotes" placeholder="Notas para el editor"></textarea></div>
             <div id="uploadDestination" class="upload-destination">Elige un cliente para ver el destino.</div>
             <label id="uploadDropzone" class="upload-drop" for="uploadFiles">
@@ -523,7 +519,7 @@
       const status = state.role === "admin" && !uploading ? `<select data-month-video-status="${video.id}">${["ready", "editing", "needs_info", "review", "delivered"].map((value) => `<option value="${value}" ${video.status === value ? "selected" : ""}>${statusLabel(value)}</option>`).join("")}</select>` : `<span class="badge st-${esc(video.status || "ready")}">${esc(statusLabel(video.status))}</span>`;
       const note = video.notes ? `<span>${esc(video.notes)}</span>` : "";
       const metaStatus = state.role === "admin" && !uploading ? "" : status;
-      return `<article class="month-video panel"><div class="video-number">${videoNumber(video.sequence)}</div><div><h3>Video ${videoNumber(video.sequence)}</h3><div class="meta">${metaStatus}${video.deadline ? `<span class="due ${deadlineClass(video.deadline)}">${esc(deadlineText(video.deadline))}</span>` : ""}${note}</div></div><div class="video-actions">${videoLinks(video)}${state.role === "admin" && !uploading ? status : ""}</div></article>`;
+      return `<article class="month-video panel"><div class="video-number">${videoNumber(video.sequence)}</div><div><h3>Video ${videoNumber(video.sequence)}</h3><div class="meta">${metaStatus}${note}</div></div><div class="video-actions">${videoLinks(video)}${state.role === "admin" && !uploading ? status : ""}</div></article>`;
     }
     function renderJob(job) {
       const p = progress(job);
@@ -569,7 +565,6 @@
                 <span>${esc(clientName(job.client_id))}</span>
                 ${statusSelect ? "" : `<span class="badge st-${esc(job.status || "ready")}">${esc(statusLabel(job.status))}</span>`}
                 ${state.role !== "client" && job.submitted_by ? `<span>Enviado por ${esc(submittedByName(job))}</span>` : ""}
-                ${job.deadline ? `<span class="due ${deadlineClass(job.deadline)}">${esc(deadlineText(job.deadline))}</span>` : ""}
                 ${job.archived ? `<span class="badge">Archivado</span>` : ""}
               </div>
             </div>
@@ -887,7 +882,7 @@
         if (kind === "source") {
           start = await rpc("agenda_prepare_month_video_upload", {
             tok: state.token, p_client_id: client.id, p_month_key: `${normalizedMonthKey(monthKey)}-01`,
-            p_deadline: $("uploadDeadline").value || null, p_notes: $("uploadNotes").value.trim(),
+            p_deadline: null, p_notes: $("uploadNotes").value.trim(),
             p_files_total: state.upload.files.length, p_bytes_total: bytes, p_uploader_email: state.drive.email
           });
           let rawMonthFolderId = start.raw_month_folder_id;
@@ -994,7 +989,7 @@
           p_client_id: $("jobClient").value,
           p_title: $("jobTitle").value.trim(),
           p_links: lines($("jobLinks").value).map(safeUrl).filter(Boolean),
-          p_deadline: $("jobDeadline").value || null,
+          p_deadline: null,
           p_notes: $("jobNotes").value.trim(),
           p_videos: Number($("jobVideos").value || 0)
         });
