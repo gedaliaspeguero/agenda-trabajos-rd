@@ -1,0 +1,9 @@
+# Local Netlify folder
+.netlify
+# Copia de despliegue (el fuente es index.html en la raiz)
+dist/
+.DS_Store
+# Nunca subir tokens o links privados
+*token*
+MI-LINK*
+LINK-*
