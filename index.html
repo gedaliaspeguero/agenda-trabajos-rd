@@ -655,6 +655,7 @@
     function uploadKind() { return $("uploadKind").value; }
     function uploadClient() { return state.clients.find((client) => client.id === $("uploadClient").value); }
     function uploadVideo() { return state.monthVideos.find((video) => video.id === $("uploadVideo").value); }
+    function creatingEditOnlyVideo() { return $("uploadVideo").value === "__new_edit_only__"; }
     function setUploadStatus(text, type = "") { setStatus("uploadStatus", text, type); }
     function renderDriveAccount() {
       const connected = Boolean(state.drive.token && state.drive.email);
@@ -704,8 +705,10 @@
       const clientId = $("uploadClient").value;
       const allVideos = monthVideosFor(clientId, $("uploadMonth").value);
       const videos = allVideos.filter((video) => !["uploading", "delivery_uploading"].includes(video.status));
-      selectOptions("uploadVideo", videos.map((video) => `<option value="${video.id}">Video ${videoNumber(video.sequence)} · ${esc(statusLabel(video.status))}</option>`).join(""));
       const next = allVideos.length ? Math.max(...allVideos.map((video) => video.sequence)) + 1 : 1;
+      const videoOptions = videos.map((video) => `<option value="${video.id}">Video ${videoNumber(video.sequence)} · ${esc(statusLabel(video.status))}</option>`);
+      if (delivery) videoOptions.push(`<option value="__new_edit_only__">No pertenece a ningun RAW registrado · Crear Video ${videoNumber(next)}</option>`);
+      selectOptions("uploadVideo", videoOptions.join(""));
       $("uploadVideoPreview").classList.toggle("hidden", delivery);
       $("uploadVideoPreview").textContent = delivery ? "El edit final se guarda directamente en la carpeta del mes." : `Se creará Raw By Codex / ${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)} / ${videoNumber(next)}.`;
       $("uploadFiles").multiple = !delivery;
@@ -735,15 +738,18 @@
       const kind = uploadKind();
       const folderId = kind === "delivery" ? client?.delivery_folder_id : client?.source_folder_id;
       const label = kind === "delivery" ? "Edit By Codex" : "Raw By Codex";
+      const allVideos = monthVideosFor($("uploadClient").value, $("uploadMonth").value);
+      const next = allVideos.length ? Math.max(...allVideos.map((item) => item.sequence)) + 1 : 1;
+      const sequence = video?.sequence || (creatingEditOnlyVideo() ? next : null);
       if (!client) {
         $("uploadDestination").textContent = "Elige un cliente para ver el destino.";
       } else if (!folderId) {
         $("uploadDestination").textContent = `La carpeta raiz de ${label} no esta configurada para ${client.name}. Un administrador debe pegar el link en Clientes.`;
-      } else if (kind === "delivery" && !video) {
+      } else if (kind === "delivery" && !sequence) {
         $("uploadDestination").textContent = `No hay un video disponible en ${monthLabel($("uploadMonth").value)} para recibir un edit final.`;
       } else {
         const folderPath = `${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)}`;
-        const suffix = kind === "delivery" ? `${folderPath} / ${videoNumber(video?.sequence)}.ext` : `${folderPath} / siguiente video`;
+        const suffix = kind === "delivery" ? `${folderPath} / ${videoNumber(sequence)}.ext` : `${folderPath} / siguiente video`;
         $("uploadDestination").textContent = `${label} / ${suffix}`;
       }
     }
@@ -975,6 +981,7 @@
       const kind = uploadKind();
       const client = uploadClient();
       const video = uploadVideo();
+      const createEditOnlyVideo = kind === "delivery" && creatingEditOnlyVideo();
       const rootFolderId = kind === "delivery" ? client?.delivery_folder_id : client?.source_folder_id;
       const monthKey = $("uploadMonth").value;
       if (!state.drive.token) return setUploadStatus("Conecta Google Drive primero.", "error");
@@ -985,7 +992,7 @@
       if (!client || !rootFolderId) return setUploadStatus("La carpeta raiz de Drive para este cliente no esta configurada.", "error");
       if (!monthKey) return setUploadStatus("Elige el mes del material.", "error");
       if (!state.upload.files.length) return setUploadStatus("Arrastra al menos un archivo.", "error");
-      if (kind === "delivery" && !video) return setUploadStatus("Elige el video al que pertenece el edit final.", "error");
+      if (kind === "delivery" && !video && !createEditOnlyVideo) return setUploadStatus("Elige el video al que pertenece el edit final.", "error");
       if (kind === "delivery" && state.upload.files.length !== 1) return setUploadStatus("Un edit final debe ser un solo archivo.", "error");
       const bytes = state.upload.files.reduce((sum, item) => sum + item.file.size, 0);
       state.upload.active = true; state.upload.cancelled = false; state.upload.startedAt = Date.now(); state.upload.lastSync = 0;
@@ -1017,16 +1024,37 @@
             p_video_id: start.video_id, p_raw_folder_id: folderId
           });
         } else {
-          start = await rpc("agenda_start_month_edit_upload", {
-            tok: state.token, p_video_id: video.id, p_files_total: 1, p_bytes_total: bytes, p_uploader_email: state.drive.email
-          });
-          folderId = start.folder_id;
+          if (createEditOnlyVideo) {
+            start = await rpc("agenda_prepare_month_edit_upload", {
+              tok: state.token, p_client_id: client.id, p_month_key: `${normalizedMonthKey(monthKey)}-01`,
+              p_files_total: 1, p_bytes_total: bytes, p_uploader_email: state.drive.email
+            });
+            let editsYearFolderId = start.edits_year_folder_id;
+            let editsMonthFolderId = start.edits_month_folder_id;
+            const yearName = driveYearLabel(monthKey);
+            const monthName = driveMonthName(monthKey);
+            if (!editsYearFolderId) editsYearFolderId = (await createDriveFolder(yearName, start.edits_root_folder_id)).id;
+            if (!editsMonthFolderId) editsMonthFolderId = (await createDriveFolder(monthName, editsYearFolderId)).id;
+            await rpc("agenda_set_month_drive_structure", {
+              tok: state.token, p_month_id: start.month_id,
+              p_raw_year_folder_id: null, p_edits_year_folder_id: editsYearFolderId,
+              p_raw_month_folder_id: null, p_edits_month_folder_id: editsMonthFolderId
+            });
+            folderId = editsMonthFolderId;
+          } else {
+            start = await rpc("agenda_start_month_edit_upload", {
+              tok: state.token, p_video_id: video.id, p_files_total: 1, p_bytes_total: bytes, p_uploader_email: state.drive.email
+            });
+            folderId = start.folder_id;
+          }
         }
         state.upload.jobId = start.video_id;
         const totals = { bytes, files: state.upload.files.length, completedBytes: 0 };
         renderUploadProgress(0, bytes, 0, totals.files);
         for (let index = 0; index < state.upload.files.length; index += 1) {
-          const driveName = kind === "delivery" ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[index].file.name)}` : undefined;
+          const driveName = kind === "delivery" && !createEditOnlyVideo
+            ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[index].file.name)}`
+            : undefined;
           await uploadDriveFile(state.upload.files[index], folderId, index, totals, driveName);
           totals.completedBytes += state.upload.files[index].file.size;
           renderUploadProgress(totals.completedBytes, bytes, index + 1, totals.files);
@@ -1035,7 +1063,9 @@
         const links = kind === "source" ? [`https://drive.google.com/drive/folders/${folderId}`, ...state.upload.files.map((item) => item.link).filter(Boolean)] : state.upload.files.map((item) => item.link).filter(Boolean);
         await rpc("agenda_finish_month_video_upload", {
           tok: state.token, p_video_id: start.video_id, p_kind: finishKind, p_links: links,
-          p_file_name: kind === "delivery" ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}` : null
+          p_file_name: kind === "delivery"
+            ? (createEditOnlyVideo ? state.upload.files[0].file.name : `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}`)
+            : null
         });
         setUploadStatus(kind === "delivery" ? "Edit final listo para revision." : "Material listo para editar.", "ok");
         state.upload.files = [];
