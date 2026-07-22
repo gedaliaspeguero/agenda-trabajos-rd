@@ -707,7 +707,7 @@
       const videos = allVideos.filter((video) => !["uploading", "delivery_uploading"].includes(video.status));
       const next = allVideos.length ? Math.max(...allVideos.map((video) => video.sequence)) + 1 : 1;
       const videoOptions = videos.map((video) => `<option value="${video.id}">Video ${videoNumber(video.sequence)} · ${esc(statusLabel(video.status))}</option>`);
-      if (delivery) videoOptions.push(`<option value="__new_edit_only__">No pertenece a ningun RAW registrado · Crear Video ${videoNumber(next)}</option>`);
+      if (delivery) videoOptions.push(`<option value="__new_edit_only__">No pertenece a ningun RAW registrado</option>`);
       selectOptions("uploadVideo", videoOptions.join(""));
       $("uploadVideoPreview").classList.toggle("hidden", delivery);
       $("uploadVideoPreview").textContent = delivery ? "El edit final se guarda directamente en la carpeta del mes." : `Se creará Raw By Codex / ${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)} / ${videoNumber(next)}.`;
@@ -1050,7 +1050,7 @@
             folderId = start.folder_id;
           }
         }
-        state.upload.jobId = start.video_id;
+        state.upload.jobId = createEditOnlyVideo ? "" : start.video_id;
         const totals = { bytes, files: state.upload.files.length, completedBytes: 0 };
         renderUploadProgress(0, bytes, 0, totals.files);
         for (let index = 0; index < state.upload.files.length; index += 1) {
@@ -1063,13 +1063,16 @@
           await syncUploadProgress(totals.completedBytes, bytes, index + 1, totals.files, true);
         }
         const links = kind === "source" ? [`https://drive.google.com/drive/folders/${folderId}`, ...state.upload.files.map((item) => item.link).filter(Boolean)] : state.upload.files.map((item) => item.link).filter(Boolean);
-        await rpc("agenda_finish_month_video_upload", {
-          tok: state.token, p_video_id: start.video_id, p_kind: finishKind, p_links: links,
-          p_file_name: kind === "delivery"
-            ? (createEditOnlyVideo ? state.upload.files[0].file.name : `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}`)
-            : null
-        });
-        setUploadStatus(kind === "delivery" ? "Edit final listo para revision." : "Material listo para editar.", "ok");
+        if (!createEditOnlyVideo) {
+          await rpc("agenda_finish_month_video_upload", {
+            tok: state.token, p_video_id: start.video_id, p_kind: finishKind, p_links: links,
+            p_file_name: kind === "delivery" ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}` : null
+          });
+        }
+        setUploadStatus(
+          createEditOnlyVideo ? "Edit subido con su nombre original." : kind === "delivery" ? "Edit final listo para revision." : "Material listo para editar.",
+          "ok"
+        );
         state.upload.files = [];
         $("uploadFiles").value = "";
         $("chooseAnotherFolderBtn").classList.toggle("hidden", kind !== "source");
