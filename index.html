@@ -749,7 +749,9 @@
         $("uploadDestination").textContent = `No hay un video disponible en ${monthLabel($("uploadMonth").value)} para recibir un edit final.`;
       } else {
         const folderPath = `${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)}`;
-        const suffix = kind === "delivery" ? `${folderPath} / ${videoNumber(sequence)}.ext` : `${folderPath} / siguiente video`;
+        const suffix = kind === "delivery"
+          ? `${folderPath} / ${creatingEditOnlyVideo() ? "nombre original del archivo" : `${videoNumber(sequence)}.ext`}`
+          : `${folderPath} / siguiente video`;
         $("uploadDestination").textContent = `${label} / ${suffix}`;
       }
     }
