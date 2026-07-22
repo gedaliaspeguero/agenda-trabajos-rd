@@ -761,8 +761,14 @@
     function setUploadFiles(fileList) {
       if (state.upload.active) return;
       const known = new Map();
+      let ignored = 0;
       for (const file of [...fileList]) {
-        known.set(`${file.name}:${file.size}:${file.lastModified}`, { file, done: 0, status: "En espera", link: "" });
+        if (file.name === ".DS_Store" || file.name.startsWith("._") || file.name.startsWith(".")) {
+          ignored += 1;
+          continue;
+        }
+        const path = file.webkitRelativePath || file.name;
+        known.set(`${path}:${file.size}:${file.lastModified}`, { file, done: 0, status: "En espera", link: "" });
       }
       state.upload.files = [...known.values()];
       const emptyFiles = state.upload.files.filter((item) => item.file.size === 0);
@@ -774,6 +780,8 @@
         state.upload.files = state.upload.files.slice(-1);
         setUploadStatus("Un edit final es un solo archivo; se usara el ultimo que elegiste.", "error");
       }
+      if (ignored) setUploadStatus(`Omitimos ${ignored} archivo${ignored === 1 ? "" : "s"} invisible${ignored === 1 ? "" : "s"} de macOS.`, "ok");
+      if (!state.upload.files.length) setUploadStatus("La carpeta no contiene archivos que se puedan subir.", "error");
       renderUploadFiles();
     }
     function renderUploadProgress(bytesDone, bytesTotal, filesDone, filesTotal) {
@@ -781,7 +789,8 @@
       const elapsed = Math.max(1, (Date.now() - state.upload.startedAt) / 1000);
       const speed = bytesDone / elapsed;
       const eta = speed ? (bytesTotal - bytesDone) / speed : 0;
-      $("uploadOverall").textContent = `${filesDone}/${filesTotal} archivos · ${pct}% total`;
+      const uploadingFile = state.upload.active && filesDone < filesTotal;
+      $("uploadOverall").textContent = uploadingFile ? `Subiendo archivo ${filesDone + 1} de ${filesTotal} · ${pct}% total` : `${filesDone}/${filesTotal} archivos · ${pct}% total`;
       $("uploadOverallBar").style.width = `${pct}%`;
       $("uploadOverallMetrics").textContent = `${bytesText(bytesDone)} / ${bytesText(bytesTotal)} · ${bytesText(speed)}/s${eta ? ` · ETA ${timeText(eta)}` : ""}`;
     }
@@ -924,6 +933,9 @@
         if (state.upload.cancelled) throw new Error("Subida cancelada.");
         const end = Math.min(offset + CHUNK_SIZE, item.file.size) - 1;
         let result;
+        item.status = "Subiendo";
+        renderUploadFiles();
+        renderUploadProgress(totals.completedBytes + offset, totals.bytes, index, totals.files);
         for (let attempt = 0; attempt < 3; attempt += 1) {
           try {
             result = await uploadChunk(session, item.file.slice(offset, end + 1), offset, end, item.file.size, (done) => {
@@ -974,6 +986,7 @@
       const bytes = state.upload.files.reduce((sum, item) => sum + item.file.size, 0);
       state.upload.active = true; state.upload.cancelled = false; state.upload.startedAt = Date.now(); state.upload.lastSync = 0;
       $("startUploadBtn").disabled = true; $("cancelUploadBtn").disabled = false;
+      setUploadStatus(`Preparando ${state.upload.files.length} archivo${state.upload.files.length === 1 ? "" : "s"}...`);
       try {
         let start, folderId, finishKind = kind;
         if (kind === "source") {
