@@ -540,9 +540,12 @@
       if (!normalized) return "este mes";
       return new Intl.DateTimeFormat("es-DO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${normalized}-01T12:00:00Z`));
     }
-    function driveMonthLabel(key) {
+    function driveYearLabel(key) {
+      return normalizedMonthKey(key).slice(0, 4);
+    }
+    function driveMonthName(key) {
       const normalized = normalizedMonthKey(key);
-      return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${normalized}-01T12:00:00Z`));
+      return new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(new Date(`${normalized}-01T12:00:00Z`));
     }
     function videoNumber(sequence) { return String(sequence || 0).padStart(2, "0"); }
     function videoLinks(video) {
@@ -635,8 +638,8 @@
           <h3>${esc(c.name)}</h3>
           <div class="field"><span>Nombre</span><input data-client-name="${c.id}" value="${esc(c.name)}"></div>
           <div class="field"><span>Pasos del flujo (uno por línea)</span><textarea data-client-steps="${c.id}">${esc((c.steps || []).join("\n"))}</textarea></div>
-          <div class="field"><span>Carpeta raiz de Drive · Raw</span><input data-client-source-folder="${c.id}" value="${esc(c.source_folder_id || "")}" placeholder="Pega el link de la carpeta Raw"></div>
-          <div class="field"><span>Carpeta raiz de Drive · Edits</span><input data-client-delivery-folder="${c.id}" value="${esc(c.delivery_folder_id || "")}" placeholder="Pega el link de la carpeta Edits"></div>
+          <div class="field"><span>Carpeta raíz de Drive · Raw By Codex</span><input data-client-source-folder="${c.id}" value="${esc(c.source_folder_id || "")}" placeholder="Pega el link de Raw By Codex"></div>
+          <div class="field"><span>Carpeta raíz de Drive · Edit By Codex</span><input data-client-delivery-folder="${c.id}" value="${esc(c.delivery_folder_id || "")}" placeholder="Pega el link de Edit By Codex"></div>
           <div class="actions">
             <button class="secondary" data-copy-client="${c.token}" type="button">Copiar link del cliente</button>
             <button data-save-client="${c.id}" type="button">Guardar</button>
@@ -704,7 +707,7 @@
       selectOptions("uploadVideo", videos.map((video) => `<option value="${video.id}">Video ${videoNumber(video.sequence)} · ${esc(statusLabel(video.status))}</option>`).join(""));
       const next = allVideos.length ? Math.max(...allVideos.map((video) => video.sequence)) + 1 : 1;
       $("uploadVideoPreview").classList.toggle("hidden", delivery);
-      $("uploadVideoPreview").textContent = delivery ? "El edit final se guarda directamente en la carpeta del mes." : `Se creara Raw / ${driveMonthLabel($("uploadMonth").value)} / ${videoNumber(next)}.`;
+      $("uploadVideoPreview").textContent = delivery ? "El edit final se guarda directamente en la carpeta del mes." : `Se creará Raw By Codex / ${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)} / ${videoNumber(next)}.`;
       $("uploadFiles").multiple = !delivery;
       if (delivery) {
         $("uploadFiles").removeAttribute("webkitdirectory");
@@ -731,7 +734,7 @@
       const video = uploadVideo();
       const kind = uploadKind();
       const folderId = kind === "delivery" ? client?.delivery_folder_id : client?.source_folder_id;
-      const label = kind === "delivery" ? "Edits" : "Raw";
+      const label = kind === "delivery" ? "Edit By Codex" : "Raw By Codex";
       if (!client) {
         $("uploadDestination").textContent = "Elige un cliente para ver el destino.";
       } else if (!folderId) {
@@ -739,7 +742,8 @@
       } else if (kind === "delivery" && !video) {
         $("uploadDestination").textContent = `No hay un video disponible en ${monthLabel($("uploadMonth").value)} para recibir un edit final.`;
       } else {
-        const suffix = kind === "delivery" ? `${driveMonthLabel($("uploadMonth").value)} / ${videoNumber(video?.sequence)}.ext` : `${driveMonthLabel($("uploadMonth").value)} / siguiente video`;
+        const folderPath = `${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)}`;
+        const suffix = kind === "delivery" ? `${folderPath} / ${videoNumber(video?.sequence)}.ext` : `${folderPath} / siguiente video`;
         $("uploadDestination").textContent = `${label} / ${suffix}`;
       }
     }
@@ -995,15 +999,22 @@
             p_deadline: null, p_notes: $("uploadNotes").value.trim(),
             p_files_total: state.upload.files.length, p_bytes_total: bytes, p_uploader_email: state.drive.email
           });
+          let rawYearFolderId = start.raw_year_folder_id;
+          let editsYearFolderId = start.edits_year_folder_id;
           let rawMonthFolderId = start.raw_month_folder_id;
           let editsMonthFolderId = start.edits_month_folder_id;
-          const monthName = driveMonthLabel(monthKey);
-          if (!rawMonthFolderId) rawMonthFolderId = (await createDriveFolder(monthName, start.raw_root_folder_id)).id;
-          if (!editsMonthFolderId) editsMonthFolderId = (await createDriveFolder(monthName, start.edits_root_folder_id)).id;
+          const yearName = driveYearLabel(monthKey);
+          const monthName = driveMonthName(monthKey);
+          if (!rawYearFolderId) rawYearFolderId = (await createDriveFolder(yearName, start.raw_root_folder_id)).id;
+          if (!editsYearFolderId) editsYearFolderId = (await createDriveFolder(yearName, start.edits_root_folder_id)).id;
+          if (!rawMonthFolderId) rawMonthFolderId = (await createDriveFolder(monthName, rawYearFolderId)).id;
+          if (!editsMonthFolderId) editsMonthFolderId = (await createDriveFolder(monthName, editsYearFolderId)).id;
           folderId = (await createDriveFolder(videoNumber(start.sequence), rawMonthFolderId)).id;
-          await rpc("agenda_set_month_drive_folders", {
-            tok: state.token, p_month_id: start.month_id, p_raw_month_folder_id: rawMonthFolderId,
-            p_edits_month_folder_id: editsMonthFolderId, p_video_id: start.video_id, p_raw_folder_id: folderId
+          await rpc("agenda_set_month_drive_structure", {
+            tok: state.token, p_month_id: start.month_id,
+            p_raw_year_folder_id: rawYearFolderId, p_edits_year_folder_id: editsYearFolderId,
+            p_raw_month_folder_id: rawMonthFolderId, p_edits_month_folder_id: editsMonthFolderId,
+            p_video_id: start.video_id, p_raw_folder_id: folderId
           });
         } else {
           start = await rpc("agenda_start_month_edit_upload", {
