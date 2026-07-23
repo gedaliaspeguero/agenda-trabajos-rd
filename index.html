@@ -238,7 +238,7 @@
     <h1>Agenda de Trabajos</h1>
     <p class="login-sub">Organiza cada video desde que llegan los raws hasta el edit final.</p>
     <div class="login-choice-grid">
-      <div class="upload-choice"><div class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div><div><h3>Subir raws</h3><p>Una carpeta por video. La agenda crea su numero y la deja lista para editar.</p></div></div>
+      <div class="upload-choice"><div class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div><div><h3>Subir raws</h3><p>Selecciona varias carpetas y la agenda crea un video por cada una.</p></div></div>
       <div class="upload-choice"><div class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m9 9 6 3-6 3z"/></svg></div><div><h3>Subir edits</h3><p>Elige el video y sube su archivo final al mes correspondiente.</p></div></div>
     </div>
     <p class="login-sub">Entra con tu link privado o pega tu token.</p>
@@ -318,7 +318,7 @@
         </div>
         <div id="uploadLanding" class="upload-landing">
           <div class="upload-choice-grid">
-            <button class="upload-choice" data-upload-choice="source" type="button"><div class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2 2v-3"/></svg></div><div><h3>Subir raws</h3><p>Selecciona una carpeta de clips. Se creara el proximo video del mes automaticamente.</p></div></button>
+            <button class="upload-choice" data-upload-choice="source" type="button"><div class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2 2v-3"/></svg></div><div><h3>Subir raws</h3><p>Selecciona una o varias carpetas de clips. Cada una se convierte en su propio video.</p></div></button>
             <button class="upload-choice" data-upload-choice="delivery" type="button"><div class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m9 9 6 3-6 3z"/></svg></div><div><h3>Subir edits</h3><p>Escoge un video que ya tenga raws y entrega su edit final como un archivo.</p></div></button>
           </div>
           <div class="drive-account-card panel"><div><strong id="landingDriveTitle">Google Drive</strong><span id="landingDriveAccount" class="status">Conecta la cuenta que tiene acceso al Drive compartido.</span></div><button id="landingConnectDriveBtn" class="secondary" type="button">Conectar Google Drive</button></div>
@@ -706,11 +706,16 @@
       const allVideos = monthVideosFor(clientId, $("uploadMonth").value);
       const videos = allVideos.filter((video) => !["uploading", "delivery_uploading"].includes(video.status));
       const next = allVideos.length ? Math.max(...allVideos.map((video) => video.sequence)) + 1 : 1;
+      const sourceGroups = delivery ? [] : sourceUploadGroups();
       const videoOptions = videos.map((video) => `<option value="${video.id}">Video ${videoNumber(video.sequence)} · ${esc(statusLabel(video.status))}</option>`);
       if (delivery) videoOptions.push(`<option value="__new_edit_only__">No pertenece a ningun RAW registrado</option>`);
       selectOptions("uploadVideo", videoOptions.join(""));
       $("uploadVideoPreview").classList.toggle("hidden", delivery);
-      $("uploadVideoPreview").textContent = delivery ? "El edit final se guarda directamente en la carpeta del mes." : `Se creará Raw By Codex / ${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)} / ${videoNumber(next)}.`;
+      $("uploadVideoPreview").textContent = delivery
+        ? "El edit final se guarda directamente en la carpeta del mes."
+        : sourceGroups.length > 1
+          ? `Se crearán ${sourceGroups.length} videos, desde ${videoNumber(next)} hasta ${videoNumber(next + sourceGroups.length - 1)}.`
+          : `Se creará Raw By Codex / ${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)} / ${videoNumber(next)}.`;
       $("uploadFiles").multiple = !delivery;
       if (delivery) {
         $("uploadFiles").removeAttribute("webkitdirectory");
@@ -720,10 +725,10 @@
       } else {
         $("uploadFiles").setAttribute("webkitdirectory", "");
         $("uploadFiles").setAttribute("directory", "");
-        $("uploadDropTitle").textContent = "Arrastra una carpeta de raws";
-        $("uploadDropCopy").textContent = "o haz clic para elegirla desde tu Mac";
+        $("uploadDropTitle").textContent = "Arrastra una o varias carpetas de raws";
+        $("uploadDropCopy").textContent = "o haz clic para elegirlas desde tu Mac";
       }
-      $("startUploadBtn").textContent = delivery ? "Subir edit final" : `Subir Video ${videoNumber(next)}`;
+      $("startUploadBtn").textContent = delivery ? "Subir edit final" : sourceGroups.length > 1 ? `Subir ${sourceGroups.length} videos` : `Subir Video ${videoNumber(next)}`;
       $("syncedVideosTitle").textContent = `Videos de ${monthLabel($("uploadMonth").value)}`;
       renderSyncedVideos();
     }
@@ -740,6 +745,7 @@
       const label = kind === "delivery" ? "Edit By Codex" : "Raw By Codex";
       const allVideos = monthVideosFor($("uploadClient").value, $("uploadMonth").value);
       const next = allVideos.length ? Math.max(...allVideos.map((item) => item.sequence)) + 1 : 1;
+      const sourceGroups = kind === "source" ? sourceUploadGroups() : [];
       const sequence = video?.sequence || (creatingEditOnlyVideo() ? next : null);
       if (!client) {
         $("uploadDestination").textContent = "Elige un cliente para ver el destino.";
@@ -751,7 +757,9 @@
         const folderPath = `${driveYearLabel($("uploadMonth").value)} / ${driveMonthName($("uploadMonth").value)}`;
         const suffix = kind === "delivery"
           ? `${folderPath} / ${creatingEditOnlyVideo() ? "nombre original del archivo" : `${videoNumber(sequence)}.ext`}`
-          : `${folderPath} / siguiente video`;
+          : sourceGroups.length > 1
+            ? `${folderPath} / videos ${videoNumber(next)}-${videoNumber(next + sourceGroups.length - 1)}`
+            : `${folderPath} / siguiente video`;
         $("uploadDestination").textContent = `${label} / ${suffix}`;
       }
     }
@@ -759,8 +767,12 @@
       const list = $("uploadFilesList");
       const files = state.upload.files;
       const bytes = files.reduce((sum, item) => sum + item.file.size, 0);
-      const folderName = files[0]?.file.webkitRelativePath?.split("/")[0];
-      $("uploadSelection").textContent = files.length ? `${folderName ? `${folderName} · ` : ""}${files.length} archivos · ${bytesText(bytes)}` : "Ningun archivo seleccionado";
+      const sourceGroups = uploadKind() === "source" ? sourceUploadGroups() : [];
+      const folderName = sourceGroups[0]?.name || files[0]?.path?.split("/")[0];
+      const selection = sourceGroups.length > 1
+        ? `${sourceGroups.length} carpetas · ${files.length} archivos · ${bytesText(bytes)}`
+        : `${folderName ? `${folderName} · ` : ""}${files.length} archivos · ${bytesText(bytes)}`;
+      $("uploadSelection").textContent = files.length ? selection : "Ningun archivo seleccionado";
       if (!files.length) {
         list.innerHTML = `<div class="empty">Los archivos apareceran aqui.</div>`;
         return;
@@ -774,13 +786,14 @@
       if (state.upload.active) return;
       const known = new Map();
       let ignored = 0;
-      for (const file of [...fileList]) {
+      for (const entry of [...fileList]) {
+        const file = entry.file || entry;
         if (file.name === ".DS_Store" || file.name.startsWith("._") || file.name.startsWith(".")) {
           ignored += 1;
           continue;
         }
-        const path = file.webkitRelativePath || file.name;
-        known.set(`${path}:${file.size}:${file.lastModified}`, { file, done: 0, status: "En espera", link: "" });
+        const path = entry.path || file.webkitRelativePath || file.name;
+        known.set(`${path}:${file.size}:${file.lastModified}`, { file, path, done: 0, status: "En espera", link: "" });
       }
       state.upload.files = [...known.values()];
       const emptyFiles = state.upload.files.filter((item) => item.file.size === 0);
@@ -795,6 +808,44 @@
       if (ignored) setUploadStatus(`Omitimos ${ignored} archivo${ignored === 1 ? "" : "s"} invisible${ignored === 1 ? "" : "s"} de macOS.`, "ok");
       if (!state.upload.files.length) setUploadStatus("La carpeta no contiene archivos que se puedan subir.", "error");
       renderUploadFiles();
+      renderUploadJobs();
+      renderUploadDestination();
+    }
+    function sourceUploadGroups() {
+      const groups = new Map();
+      for (const item of state.upload.files) {
+        const relativePath = item.path || item.file.webkitRelativePath || "";
+        const name = relativePath.split("/").filter(Boolean)[0] || "Material sin carpeta";
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(item);
+      }
+      return [...groups].map(([name, files]) => ({
+        name,
+        files,
+        bytes: files.reduce((sum, item) => sum + item.file.size, 0)
+      }));
+    }
+    async function filesFromDroppedItems(dataTransfer) {
+      const entries = [...(dataTransfer.items || [])]
+        .map((item) => item.webkitGetAsEntry?.())
+        .filter(Boolean);
+      if (!entries.length) return [...dataTransfer.files];
+      const readEntries = async (reader) => {
+        const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        if (!batch.length) return [];
+        return [...batch, ...(await readEntries(reader))];
+      };
+      const readEntry = async (entry, parentPath = "") => {
+        const path = `${parentPath}${entry.name}`;
+        if (entry.isFile) {
+          const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+          return [{ file, path }];
+        }
+        if (!entry.isDirectory) return [];
+        const children = await readEntries(entry.createReader());
+        return (await Promise.all(children.map((child) => readEntry(child, `${path}/`)))).flat();
+      };
+      return (await Promise.all(entries.map((entry) => readEntry(entry)))).flat();
     }
     function renderUploadProgress(bytesDone, bytesTotal, filesDone, filesTotal) {
       const pct = bytesTotal ? Math.min(100, Math.round(bytesDone / bytesTotal * 100)) : 0;
@@ -937,7 +988,7 @@
         });
       } catch {}
     }
-    async function uploadDriveFile(item, folderId, index, totals, driveName) {
+    async function uploadDriveFile(item, folderId, index, totals, driveName, jobProgress = totals) {
       item.status = "Iniciando"; renderUploadFiles();
       const session = await startDriveSession(item.file, folderId, driveName);
       let offset = 0;
@@ -955,7 +1006,7 @@
               const overall = totals.completedBytes + done;
               renderUploadFiles();
               renderUploadProgress(overall, totals.bytes, index, totals.files);
-              syncUploadProgress(overall, totals.bytes, index, totals.files);
+              syncUploadProgress(jobProgress.completedBytes + done, jobProgress.bytes, jobProgress.filesDone, jobProgress.files);
             });
             break;
           } catch (error) {
@@ -976,6 +1027,31 @@
     function fileExtension(fileName) {
       const match = String(fileName || "").match(/(\.[A-Za-z0-9]{1,10})$/);
       return match ? match[1].toLowerCase() : "";
+    }
+    async function prepareSourceVideoUpload(client, monthKey, group) {
+      const start = await rpc("agenda_prepare_month_video_upload", {
+        tok: state.token, p_client_id: client.id, p_month_key: `${normalizedMonthKey(monthKey)}-01`,
+        p_deadline: null, p_notes: $("uploadNotes").value.trim(),
+        p_files_total: group.files.length, p_bytes_total: group.bytes, p_uploader_email: state.drive.email
+      });
+      let rawYearFolderId = start.raw_year_folder_id;
+      let editsYearFolderId = start.edits_year_folder_id;
+      let rawMonthFolderId = start.raw_month_folder_id;
+      let editsMonthFolderId = start.edits_month_folder_id;
+      const yearName = driveYearLabel(monthKey);
+      const monthName = driveMonthName(monthKey);
+      if (!rawYearFolderId) rawYearFolderId = (await createDriveFolder(yearName, start.raw_root_folder_id)).id;
+      if (!editsYearFolderId) editsYearFolderId = (await createDriveFolder(yearName, start.edits_root_folder_id)).id;
+      if (!rawMonthFolderId) rawMonthFolderId = (await createDriveFolder(monthName, rawYearFolderId)).id;
+      if (!editsMonthFolderId) editsMonthFolderId = (await createDriveFolder(monthName, editsYearFolderId)).id;
+      const folderId = (await createDriveFolder(videoNumber(start.sequence), rawMonthFolderId)).id;
+      await rpc("agenda_set_month_drive_structure", {
+        tok: state.token, p_month_id: start.month_id,
+        p_raw_year_folder_id: rawYearFolderId, p_edits_year_folder_id: editsYearFolderId,
+        p_raw_month_folder_id: rawMonthFolderId, p_edits_month_folder_id: editsMonthFolderId,
+        p_video_id: start.video_id, p_raw_folder_id: folderId
+      });
+      return { start, folderId };
     }
     async function startWebUpload(event) {
       event.preventDefault();
@@ -1001,31 +1077,34 @@
       $("startUploadBtn").disabled = true; $("cancelUploadBtn").disabled = false;
       setUploadStatus(`Preparando ${state.upload.files.length} archivo${state.upload.files.length === 1 ? "" : "s"}...`);
       try {
-        let start, folderId, finishKind = kind;
+        const totals = { bytes, files: state.upload.files.length, completedBytes: 0, completedFiles: 0 };
+        renderUploadProgress(0, bytes, 0, totals.files);
         if (kind === "source") {
-          start = await rpc("agenda_prepare_month_video_upload", {
-            tok: state.token, p_client_id: client.id, p_month_key: `${normalizedMonthKey(monthKey)}-01`,
-            p_deadline: null, p_notes: $("uploadNotes").value.trim(),
-            p_files_total: state.upload.files.length, p_bytes_total: bytes, p_uploader_email: state.drive.email
-          });
-          let rawYearFolderId = start.raw_year_folder_id;
-          let editsYearFolderId = start.edits_year_folder_id;
-          let rawMonthFolderId = start.raw_month_folder_id;
-          let editsMonthFolderId = start.edits_month_folder_id;
-          const yearName = driveYearLabel(monthKey);
-          const monthName = driveMonthName(monthKey);
-          if (!rawYearFolderId) rawYearFolderId = (await createDriveFolder(yearName, start.raw_root_folder_id)).id;
-          if (!editsYearFolderId) editsYearFolderId = (await createDriveFolder(yearName, start.edits_root_folder_id)).id;
-          if (!rawMonthFolderId) rawMonthFolderId = (await createDriveFolder(monthName, rawYearFolderId)).id;
-          if (!editsMonthFolderId) editsMonthFolderId = (await createDriveFolder(monthName, editsYearFolderId)).id;
-          folderId = (await createDriveFolder(videoNumber(start.sequence), rawMonthFolderId)).id;
-          await rpc("agenda_set_month_drive_structure", {
-            tok: state.token, p_month_id: start.month_id,
-            p_raw_year_folder_id: rawYearFolderId, p_edits_year_folder_id: editsYearFolderId,
-            p_raw_month_folder_id: rawMonthFolderId, p_edits_month_folder_id: editsMonthFolderId,
-            p_video_id: start.video_id, p_raw_folder_id: folderId
-          });
+          const groups = sourceUploadGroups();
+          for (const group of groups) {
+            setUploadStatus(`Preparando ${group.name}...`);
+            const { start, folderId } = await prepareSourceVideoUpload(client, monthKey, group);
+            state.upload.jobId = start.video_id;
+            state.upload.lastSync = 0;
+            const jobProgress = { bytes: group.bytes, files: group.files.length, completedBytes: 0, filesDone: 0 };
+            for (const item of group.files) {
+              await uploadDriveFile(item, folderId, totals.completedFiles, totals, undefined, jobProgress);
+              totals.completedBytes += item.file.size;
+              totals.completedFiles += 1;
+              jobProgress.completedBytes += item.file.size;
+              jobProgress.filesDone += 1;
+              renderUploadProgress(totals.completedBytes, totals.bytes, totals.completedFiles, totals.files);
+              await syncUploadProgress(jobProgress.completedBytes, jobProgress.bytes, jobProgress.filesDone, jobProgress.files, true);
+            }
+            const links = [`https://drive.google.com/drive/folders/${folderId}`, ...group.files.map((item) => item.link).filter(Boolean)];
+            await rpc("agenda_finish_month_video_upload", {
+              tok: state.token, p_video_id: start.video_id, p_kind: "source", p_links: links, p_file_name: null
+            });
+            state.upload.jobId = "";
+          }
+          setUploadStatus(`${groups.length} ${groups.length === 1 ? "video listo" : "videos listos"} para editar.`, "ok");
         } else {
+          let start, folderId;
           if (createEditOnlyVideo) {
             start = await rpc("agenda_prepare_month_edit_upload", {
               tok: state.token, p_client_id: client.id, p_month_key: `${normalizedMonthKey(monthKey)}-01`,
@@ -1049,30 +1128,25 @@
             });
             folderId = start.folder_id;
           }
+          state.upload.jobId = createEditOnlyVideo ? "" : start.video_id;
+          const jobProgress = { bytes, files: 1, completedBytes: 0, filesDone: 0 };
+          const driveName = !createEditOnlyVideo ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}` : undefined;
+          await uploadDriveFile(state.upload.files[0], folderId, 0, totals, driveName, jobProgress);
+          totals.completedBytes = state.upload.files[0].file.size;
+          totals.completedFiles = 1;
+          jobProgress.completedBytes = totals.completedBytes;
+          jobProgress.filesDone = 1;
+          renderUploadProgress(totals.completedBytes, totals.bytes, totals.completedFiles, totals.files);
+          await syncUploadProgress(jobProgress.completedBytes, jobProgress.bytes, jobProgress.filesDone, jobProgress.files, true);
+          if (!createEditOnlyVideo) {
+            await rpc("agenda_finish_month_video_upload", {
+              tok: state.token, p_video_id: start.video_id, p_kind: "delivery", p_links: state.upload.files.map((item) => item.link).filter(Boolean),
+              p_file_name: `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}`
+            });
+          }
+          state.upload.jobId = "";
+          setUploadStatus(createEditOnlyVideo ? "Edit subido con su nombre original." : "Edit final listo para revision.", "ok");
         }
-        state.upload.jobId = createEditOnlyVideo ? "" : start.video_id;
-        const totals = { bytes, files: state.upload.files.length, completedBytes: 0 };
-        renderUploadProgress(0, bytes, 0, totals.files);
-        for (let index = 0; index < state.upload.files.length; index += 1) {
-          const driveName = kind === "delivery" && !createEditOnlyVideo
-            ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[index].file.name)}`
-            : undefined;
-          await uploadDriveFile(state.upload.files[index], folderId, index, totals, driveName);
-          totals.completedBytes += state.upload.files[index].file.size;
-          renderUploadProgress(totals.completedBytes, bytes, index + 1, totals.files);
-          await syncUploadProgress(totals.completedBytes, bytes, index + 1, totals.files, true);
-        }
-        const links = kind === "source" ? [`https://drive.google.com/drive/folders/${folderId}`, ...state.upload.files.map((item) => item.link).filter(Boolean)] : state.upload.files.map((item) => item.link).filter(Boolean);
-        if (!createEditOnlyVideo) {
-          await rpc("agenda_finish_month_video_upload", {
-            tok: state.token, p_video_id: start.video_id, p_kind: finishKind, p_links: links,
-            p_file_name: kind === "delivery" ? `${videoNumber(start.sequence)}${fileExtension(state.upload.files[0].file.name)}` : null
-          });
-        }
-        setUploadStatus(
-          createEditOnlyVideo ? "Edit subido con su nombre original." : kind === "delivery" ? "Edit final listo para revision." : "Material listo para editar.",
-          "ok"
-        );
         state.upload.files = [];
         $("uploadFiles").value = "";
         $("chooseAnotherFolderBtn").classList.toggle("hidden", kind !== "source");
@@ -1137,8 +1211,10 @@
     $("uploadFiles").addEventListener("change", (event) => setUploadFiles(event.target.files));
     $("uploadDropzone").addEventListener("dragover", (event) => { event.preventDefault(); $("uploadDropzone").classList.add("dragging"); });
     $("uploadDropzone").addEventListener("dragleave", () => $("uploadDropzone").classList.remove("dragging"));
-    $("uploadDropzone").addEventListener("drop", (event) => {
-      event.preventDefault(); $("uploadDropzone").classList.remove("dragging"); setUploadFiles(event.dataTransfer.files);
+    $("uploadDropzone").addEventListener("drop", async (event) => {
+      event.preventDefault(); $("uploadDropzone").classList.remove("dragging");
+      try { setUploadFiles(await filesFromDroppedItems(event.dataTransfer)); }
+      catch (error) { setUploadStatus("No se pudieron leer las carpetas que arrastraste.", "error"); }
     });
     $("uploadForm").addEventListener("submit", startWebUpload);
     $("cancelUploadBtn").addEventListener("click", () => {
