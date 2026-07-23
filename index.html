@@ -199,6 +199,19 @@
     .login-choice-grid .upload-choice { min-height: 130px; pointer-events: none; opacity: .78; }
     .month-toolbar { display: grid; grid-template-columns: minmax(190px, 280px) minmax(150px, 190px); gap: 10px; padding: 14px; margin-bottom: 16px; align-items: end; }
     .month-toolbar .field { margin: 0; }
+    .production-overview { display: grid; gap: 14px; margin-bottom: 16px; }
+    .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .overview-metric { padding: 14px; display: grid; gap: 2px; min-width: 0; }
+    .overview-metric strong { font-size: 22px; line-height: 1; }
+    .overview-metric span { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .overview-recent { padding: 16px; display: grid; gap: 10px; }
+    .overview-recent-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .overview-recent-head h3 { margin: 0; font-size: 15px; }
+    .overview-list { display: grid; gap: 2px; }
+    .overview-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+    .overview-row:first-child { border-top: 0; padding-top: 0; }
+    .overview-row h4 { margin: 0 0 2px; font-size: 14px; }
+    .overview-row button { padding: 7px 10px; font-size: 12px; }
     .production-list { display: grid; gap: 10px; }
     .month-video { padding: 14px 16px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
     .video-number { width: 42px; height: 42px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 750; font-size: 16px; }
@@ -222,8 +235,11 @@
       .step span { grid-column: 2; grid-row: 1; }
       .row { grid-template-columns: 1fr 1fr; }
       .upload-grid { grid-template-columns: 1fr; }
+      .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .month-video { grid-template-columns: auto minmax(0, 1fr); }
       .video-actions { grid-column: 2; justify-content: flex-start; }
+      .overview-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .overview-row .badge { grid-column: 1; width: max-content; }
       .month-toolbar { grid-template-columns: 1fr 1fr; }
       .upload-choice-grid, .login-choice-grid { grid-template-columns: 1fr; }
       .drive-account-card { align-items: flex-start; flex-direction: column; }
@@ -272,9 +288,10 @@
     <main>
       <section id="jobsView">
         <div class="topbar">
-          <h2>Produccion mensual</h2>
+          <h2>Produccion</h2>
           <div class="actions"><span id="countPill" class="pill">0 videos</span></div>
         </div>
+        <div id="productionOverview" class="production-overview"></div>
         <div class="month-toolbar panel">
           <div class="field"><span>Cliente</span><select id="productionClient"></select></div>
           <div class="field"><span>Mes</span><input id="productionMonth" type="month"></div>
@@ -527,8 +544,48 @@
       const clientId = $("productionClient").value;
       const key = $("productionMonth").value;
       const videos = monthVideosFor(clientId, key);
+      renderProductionOverview();
       $("countPill").textContent = `${videos.length} ${videos.length === 1 ? "video" : "videos"}`;
       $("monthVideoList").innerHTML = videos.length ? videos.map(renderMonthVideo).join("") : `<div class="empty">Todavia no hay videos en ${esc(monthLabel(key))}. Sube los raws del primero para comenzar.</div>`;
+    }
+    function renderProductionOverview() {
+      const overview = $("productionOverview");
+      if (state.role !== "admin" && state.role !== "partner") {
+        overview.innerHTML = "";
+        return;
+      }
+      const videos = state.monthVideos;
+      const totals = {
+        ready: videos.filter((video) => video.status === "ready").length,
+        editing: videos.filter((video) => video.status === "editing").length,
+        review: videos.filter((video) => video.status === "review").length,
+        attention: videos.filter((video) => ["uploading", "delivery_uploading", "needs_info"].includes(video.status)).length
+      };
+      const recent = [...videos]
+        .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
+        .slice(0, 8);
+      const metric = (value, label) => `<div class="overview-metric panel"><strong>${value}</strong><span>${label}</span></div>`;
+      const recentRows = recent.length ? recent.map((video) => {
+        const month = state.months.find((item) => item.id === video.month_id);
+        const updated = new Date(video.updated_at || video.created_at);
+        const timestamp = Number.isNaN(updated.valueOf()) ? "" : updated.toLocaleString("es-DO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+        return `<article class="overview-row">
+          <div><h4>${esc(clientName(month?.client_id))} · Video ${videoNumber(video.sequence)}</h4><div class="meta">${esc(monthLabel(month?.month_key))}${timestamp ? ` · ${esc(timestamp)}` : ""}</div></div>
+          <span class="badge st-${esc(video.status || "ready")}">${esc(statusLabel(video.status))}</span>
+          <button class="secondary" data-open-video="${video.id}" type="button">Ver</button>
+        </article>`;
+      }).join("") : `<div class="empty">Todavia no hay videos registrados.</div>`;
+      overview.innerHTML = `
+        <div class="overview-metrics">
+          ${metric(totals.ready, "Listos para editar")}
+          ${metric(totals.editing, "En edicion")}
+          ${metric(totals.review, "Listos para revision")}
+          ${metric(totals.attention, "Requieren atencion")}
+        </div>
+        <section class="overview-recent panel">
+          <div class="overview-recent-head"><h3>Actividad reciente</h3><span class="pill">${videos.length} ${videos.length === 1 ? "video" : "videos"}</span></div>
+          <div class="overview-list">${recentRows}</div>
+        </section>`;
     }
     function monthVideosFor(clientId, key) {
       const month = state.months.find((item) => item.client_id === clientId && normalizedMonthKey(item.month_key) === normalizedMonthKey(key));
@@ -1274,8 +1331,18 @@
       }
     });
     document.addEventListener("click", async (e) => {
-      const t = e.target.closest("[data-select-upload-video]") || e.target;
+      const t = e.target.closest("[data-select-upload-video], [data-open-video]") || e.target;
       try {
+        if (t.dataset.openVideo) {
+          const video = state.monthVideos.find((item) => item.id === t.dataset.openVideo);
+          const month = video && state.months.find((item) => item.id === video.month_id);
+          if (!video || !month) return;
+          $("productionClient").value = month.client_id;
+          $("productionMonth").value = normalizedMonthKey(month.month_key);
+          renderJobs();
+          $("monthVideoList").scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
         if (t.dataset.selectUploadVideo) {
           state.upload.choice = "delivery";
           $("uploadKind").value = "delivery";
